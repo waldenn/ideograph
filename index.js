@@ -19,6 +19,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
  */
 
+
+let params = {
+
+  qid:          getParameterByName( 'qid' ) || '',
+  language:     getParameterByName( 'l' ) || 'en',
+  //title:        getParameterByName( 't' ) || '',
+
+}
+
 let endpoint = "https://query.wikidata.org/sparql?query=";
 // messages:
 let loadinginfo = d3.select("#loadinginfo");
@@ -79,9 +88,12 @@ let RussiaAndBelarus = ["wd:Q184","wd:Q159"];
 let NorthAfrica =["wd:Q262","wd:Q79","wd:Q1016","wd:Q1028","wd:Q948"];
 let Oceania = [ "wd:Q408", "wd:Q26988", "wd:Q712", "wd:Q697", "wd:Q664", "wd:Q691", "wd:Q683", "wd:Q678", "wd:Q686"];
 
+let loc = [ 'wd:' + params.qid ];
+
 // INITIALISATION
 document.getElementById("upgradeGraphButton").disabled = true; 
-getGraphData(Europe);
+getGraphData( loc );
+//getGraphData(Europe);
 
 /** Fetches csv data wrom wikidata 
  * @param req a URI ecoded SPARQL query 
@@ -103,7 +115,11 @@ async function fetchWikiData(req) {
 async function getCountryList() { 
     loadinginfo.style('display', 'block');
     loadingCountries.style('display', 'block');
-    let sparql = await (await fetch('sparql/CountryList.rq')).text();
+
+    let sparql = `SELECT DISTINCT ?country ?countryLabel WHERE { ?item wdt:P1142 ?linkTo .  ?linkTo wdt:P31 wd:Q12909644 .  VALUES ?type { wd:Q7278  wd:Q24649 } ?item wdt:P31 ?type .  ?item wdt:P17 ?country .  MINUS { ?item wdt:P576 ?abolitionDate } MINUS { ?country wdt:P576 ?countryAbolitionDate }.  SERVICE wikibase:label { bd:serviceParam wikibase:language \"${params.language}\,en" . } }`;
+
+    //let sparql = await (await fetch('sparql/CountryList.rq')).text();
+
     let req = endpoint + encodeURIComponent(sparql.replace("/#.*/gm",''));
     let countries = await fetchWikiData(req);
     // console.log(countries);
@@ -124,12 +140,18 @@ async function getCountryList() {
         newdiv
             .append("label")
             .append("a")
-            .attr("href",c.country)
-            .attr("target","_blank")
+
+            //.attr("onclick", 'console.log(' + c.country + ')' )
+            .attr("onclick", 'console.log(' + c.country + ')' )
+            //.attr("onclick", 'gotoArticle(' + c.country.id.replace('wd:', '') + ')' )
+
+            //.attr("href",c.country)
+            //.attr("target","_blank")
+
             .text(c["countryLabel"])
         ;
     });
-    Europe.forEach(cval => document.getElementById(cval.replace("wd:","c")).checked = true);
+    //Europe.forEach(cval => document.getElementById(cval.replace("wd:","c")).checked = true);
     loadingCountries.style('display', 'none');
     countriesLoaded.style('display', 'block');
 }
@@ -140,11 +162,18 @@ let parties = []
  * @param countries An array of countries
 */
 async function getGraphData(countries) {   
+
     loadinginfo.style('display', 'block');
     loadingGraph.style('display', 'block');
-    let sparql1 = await (await fetch('sparql/GraphReq.rq')).text();
+    let sparql1 = `SELECT DISTINCT ?item ?itemLabel ?country ?countryLabel ?linkTo ?linkToLabel WHERE { ?item wdt:P1142 ?linkTo .  ?linkTo wdt:P31 wd:Q12909644 .  VALUES ?type { wd:Q7278  wd:Q24649 } ?item wdt:P31 ?type .  VALUES ?country { JSVAR:COUNTRIES } ?item wdt:P17 ?country .  MINUS { ?item wdt:P576 ?abolitionDate } SERVICE wikibase:label { bd:serviceParam wikibase:language "${params.language},en" . } }`;
+    //let sparql1 = await (await fetch('sparql/GraphReq.rq')).text();
+
     let req = endpoint + encodeURIComponent(sparql1.replace("JSVAR:COUNTRIES",countries.join(" ")).replace("/#.*/gm",''));
-    let sparql2 = await (await fetch('sparql/GraphExtraReq.rq')).text();
+
+    let sparql2 = `SELECT DISTINCT ?linkTo ?linkToLabel ?superLinkTo ?superLinkToLabel WHERE { ?item wdt:P1142 ?linkTo .  ?linkTo wdt:P279+ ?superLinkTo .  ?superLinkTo wdt:P31|wdt:P279 wd:Q12909644 .  VALUES ?type { wd:Q7278  wd:Q24649 } ?item wdt:P31|wdt:P279 ?type .  ?item wdt:P17 ?country .  MINUS { ?item wdt:P576 ?abolitionDate } SERVICE wikibase:label { bd:serviceParam wikibase:language "${params.language},en" . } FILTER (?country IN ( JSVAR:COUNTRIES ) ) }`;
+
+    //let sparql2 = await (await fetch('sparql/GraphExtraReq.rq')).text();
+
     let reqExtra = endpoint + encodeURIComponent(sparql2.replace("JSVAR:COUNTRIES",countries.join(" ")).replace("/#.*/gm",''));
     let [data,dataExtra] = await Promise.all([
         fetchWikiData(req), fetchWikiData(reqExtra)
@@ -429,8 +458,9 @@ function showHoverLabel(node,ev) {
     d3.select("#label")
         .attr("style", "left:"+nodex+"px;top:"+nodey+"px;")
         .select("a")
-        .attr("href",node.id.replace("wd:","http://www.wikidata.org/entity/"))
-        .attr("target","_blank")
+        //.attr("href",node.id.replace("wd:","http://www.wikidata.org/entity/"))
+        //.attr("target","_blank")
+        .attr("onclick", 'gotoArticle("' + node.id.replace('wd:', '') + '")' )
         .text(node.label)  
 }
 
@@ -485,20 +515,20 @@ function updateColor() {
 
 /** Updates the graph with data from a new set of countries */
 function updateGraph(){
-        document.getElementById("upgradeGraphButton").disabled = true; 
-        simulation.stop();
-        graph = graphstore = null;
-        loadinginfo.style('display', 'block');
-        updatingGraph.style('display', 'block');
-        let checked = [];
-        let boxes = d3.selectAll("input[type='checkbox']:checked")
-        boxes._groups[0].forEach(b=>{
-            checked.push(b.value)
-        });
-        console.log(checked);
-        app.stage.removeChildren();
-        // wait before launching
-        getGraphData(checked);
+    document.getElementById("upgradeGraphButton").disabled = true; 
+    simulation.stop();
+    graph = graphstore = null;
+    loadinginfo.style('display', 'block');
+    updatingGraph.style('display', 'block');
+    let checked = [];
+    let boxes = d3.selectAll("input[type='checkbox']:checked")
+    boxes._groups[0].forEach(b=>{
+        checked.push(b.value)
+    });
+    console.log(checked);
+    app.stage.removeChildren();
+    // wait before launching
+    getGraphData(checked);
 }
 
 // TODO add element without destroying everything
@@ -516,4 +546,14 @@ function restoreGraph(){
         l.source = graph.nodes.filter(n=> n.id == l.source.id)[0];
         l.target = graph.nodes.filter(n=> n.id == l.target.id)[0];
     });
+}
+
+window.gotoArticle = function( qid ){
+
+  console.log( 'qid: ', qid );
+
+  var url = CONZEPT_WEB_BASE + '/app/wikipedia/?t=&l=' + params.language + '&qid=' + qid ;
+
+  window.parent.postMessage({ event_id: 'handleClick', data: { type: 'link', title: '', url: url, current_pane: getCurrentPane(), target_pane: getTargetPane() } }, '*' );
+
 }
