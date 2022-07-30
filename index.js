@@ -178,7 +178,7 @@ async function getGraphData(countries) {
     let [data,dataExtra] = await Promise.all([
         fetchWikiData(req), fetchWikiData(reqExtra)
     ]); 
-    loadingGraph.text("Fetching extra graph links from WikiData...");
+    loadingGraph.text("Fetching extra graph links from Wikidata...");
     // console.log(dataExtra);
     // let parties = []; // for later filtering out ideology nodes with no incoming parties
     let nodes = [];
@@ -232,7 +232,20 @@ async function getGraphData(countries) {
 }
 
 
-let width = screen.availWidth, height = screen.availHeight;
+let width   = $(window).width(); // screen.availWidth;
+let height  = $(window).height(); // screen.availHeight;
+
+d3.select(window).on('resize', resize); 
+
+function resize() {
+
+  width   = $(window).width();
+  height  = $(window).height();
+
+  window.location.reload();
+
+}
+
 function colour(num){
     if (num > 1) return 0xD01B1B
     return 0x47abd8 ;
@@ -343,7 +356,6 @@ function drawGraph(graph) {
         }
     });
 
-
     containerLinks.zIndex = 0;
     containerIdeologies.zIndex = 2;
     containerParties.zIndex = 1;
@@ -384,6 +396,8 @@ function drawGraph(graph) {
     }
 
     simulation.alphaTarget(0.05).restart(); // give it an initial push
+
+    //simulation.stop();
 }
 
 // DRAG, PAN AND ZOOM
